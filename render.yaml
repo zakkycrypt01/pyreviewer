@@ -1,0 +1,22 @@
+# ==============================================================================
+# Render Blueprint (render.yaml)
+# One-Click Deploy on Render: https://dashboard.render.com/blueprints
+# Hacktoberfest 2026: Best Use of Render ($200 Featured Prize)
+# ==============================================================================
+services:
+  - type: web
+    name: pyreviewer
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: PYTHONUNBUFFERED
+        value: 1
+      - key: ENVIRONMENT
+        value: production

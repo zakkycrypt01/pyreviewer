@@ -114,24 +114,18 @@ class PyReviewerHandler(http.server.SimpleHTTPRequestHandler):
         
         # Healthcheck endpoint for Render & Docker
         if parsed.path == "/healthz":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({
+            self._send_json(200, {
                 "status": "healthy",
                 "service": "PyReviewer",
                 "version": "2.0.0",
                 "engine": "Python AST & Security Analyzer",
                 "docker_ready": True
-            }).encode("utf-8"))
+            })
             return
 
         # Sample snippet loader
         if parsed.path == "/api/snippets":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps(SAMPLE_SNIPPETS).encode("utf-8"))
+            self._send_json(200, SAMPLE_SNIPPETS)
             return
 
         # Serve index.html for root or SPA fallback
@@ -235,10 +229,19 @@ class PyReviewerHandler(http.server.SimpleHTTPRequestHandler):
         ])
         return "\n".join(md)
 
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+        self.end_headers()
+
     def _send_json(self, status: int, data: dict):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
         self.end_headers()
         self.wfile.write(json.dumps(data).encode("utf-8"))
 

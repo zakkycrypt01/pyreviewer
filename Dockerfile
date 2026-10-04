@@ -12,6 +12,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PORT=8080
 
+# Install git and ca-certificates for GitHub codebase scanning
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
 # Create non-root unprivileged service user for security
 RUN groupadd -g 10001 appuser && \
     useradd -u 10001 -g appuser -s /bin/bash -m appuser

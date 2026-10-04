@@ -2,9 +2,16 @@
  * PyReviewer Frontend Application Controller
  * Handles Codebase Repository Scanning, Interactive File Tree,
  * AST Review, Refactoring Diffs, and Executive Audit Reports.
+ * Resilient to VS Code Live Server (port 5500), file://, and direct deployment.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Determine API Base URL
+  // If running via Live Server (port 5500) or file://, target Python backend on localhost:8080
+  const API_BASE = (window.location.port === '8080' || window.location.hostname.includes('render.com'))
+    ? ''
+    : 'http://localhost:8080';
+
   // DOM Elements - Editor & Navigation
   const codeEditor = document.getElementById('code-editor');
   const editorGutter = document.getElementById('editor-gutter');
@@ -60,6 +67,37 @@ document.addEventListener('DOMContentLoaded', () => {
   let snippets = {};
   let currentRepoData = null;
   let activeFilePath = null;
+
+  // Safe HTTP Request Helper
+  async function requestJson(path, options = {}) {
+    const url = `${API_BASE}${path}`;
+    let res;
+    try {
+      res = await fetch(url, options);
+    } catch (netErr) {
+      throw new Error(`Cannot connect to PyReviewer backend at ${url}. Ensure 'python3 server.py' is running on port 8080.`);
+    }
+
+    const rawText = await res.text();
+    let json;
+    try {
+      json = rawText ? JSON.parse(rawText) : {};
+    } catch (parseErr) {
+      throw new Error(`Server returned non-JSON response (${res.status} ${res.statusText}): ${rawText.slice(0, 120)}`);
+    }
+
+    if (!res.ok || json.error) {
+      throw new Error(json.error || `Request failed with HTTP ${res.status}`);
+    }
+
+    return json;
+  }
+
+  function setStatus(msg, type = 'info') {
+    if (!repoScanStatus) return;
+    repoScanStatus.textContent = msg;
+    repoScanStatus.style.color = type === 'error' ? '#f87171' : type === 'success' ? '#34d399' : '#818cf8';
+  }
 
   // ================= 1. GUTTER & EDITOR SYNCHRONIZATION =================
   function updateGutter() {
@@ -141,36 +179,27 @@ document.addEventListener('DOMContentLoaded', () => {
   // ================= 3. GITHUB REPOSITORY SCANNER =================
   async function triggerRepoScan(url) {
     if (!url || !url.trim()) {
-      alert('Please enter a valid GitHub repository URL.');
+      setStatus('Please enter a valid GitHub repository URL.', 'error');
       return;
     }
 
     btnScanRepo.disabled = true;
     btnScanRepo.innerHTML = '<span>Cloning &amp; Auditing Codebase...</span>';
-    repoScanStatus.textContent = 'Cloning shallow tree & running multi-file AST security inspection...';
-    repoScanStatus.style.color = '#818cf8';
+    setStatus('Cloning shallow repository & running multi-file AST security inspection...', 'info');
 
     try {
-      const res = await fetch('/api/scan-repo', {
+      const data = await requestJson('/api/scan-repo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo_url: url.trim() })
       });
 
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Failed to scan repository.');
-      }
-
       currentRepoData = data;
       renderRepoScanResults(data);
-      repoScanStatus.textContent = `Successfully scanned ${data.total_files} Python files in ${data.repo_name}`;
-      repoScanStatus.style.color = '#34d399';
+      setStatus(`Successfully scanned ${data.total_files} Python files in ${data.repo_name}`, 'success');
     } catch (err) {
       console.error(err);
-      repoScanStatus.textContent = `Error: ${err.message}`;
-      repoScanStatus.style.color = '#f87171';
-      alert('Repository Scan Failed: ' + err.message);
+      setStatus(`Scan Failed: ${err.message}`, 'error');
     } finally {
       btnScanRepo.disabled = false;
       btnScanRepo.innerHTML = `
@@ -283,7 +312,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Simple, clean Markdown to HTML parser for the preview
     let html = mdText
       .replace(/^### (.*$)/gim, '<h3>$1</h3>')
       .replace(/^## (.*$)/gim, '<h2>$1</h2>')
@@ -293,7 +321,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/`([^`]+)`/gim, '<code>$1</code>')
       .replace(/\n\n/gim, '<br><br>');
 
-    // Convert table lines if present
     if (html.includes('|')) {
       const tableRows = html.split('<br><br>').map(block => {
         if (block.includes('| :--- |')) {
@@ -347,18 +374,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // ================= 4. SINGLE FILE SNIPPET LOADER =================
   async function loadSnippets() {
     try {
-      const res = await fetch('/api/snippets');
-      if (res.ok) {
-        snippets = await res.json();
-        const selected = snippetSelector.value;
-        if (snippets[selected]) {
-          codeEditor.value = snippets[selected];
-          updateGutter();
-          runAnalysis();
-        }
+      snippets = await requestJson('/api/snippets');
+      const selected = snippetSelector.value;
+      if (snippets[selected]) {
+        codeEditor.value = snippets[selected];
+        updateGutter();
+        runAnalysis();
       }
     } catch (e) {
-      console.log('Snippet load completed.');
+      console.log('Snippet load info:', e.message);
     }
   }
 
@@ -381,7 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function runAnalysis() {
     const code = codeEditor.value;
     if (!code.trim()) {
-      alert('Please enter Python code to review.');
+      setStatus('Please enter Python code to review.', 'error');
       return;
     }
 
@@ -389,24 +413,19 @@ document.addEventListener('DOMContentLoaded', () => {
     btnRunAnalysis.innerHTML = '<span>Analyzing AST...</span>';
 
     try {
-      const response = await fetch('/api/analyze', {
+      const data = await requestJson('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
       });
 
-      if (!response.ok) {
-        throw new Error('Analysis failed with status ' + response.status);
-      }
-
-      const data = await response.json();
       currentAnalysis = data;
       renderAnalysis(data);
       fileStatusIndicator.textContent = 'Analyzed';
       fileStatusIndicator.style.color = '#34d399';
     } catch (err) {
       console.error(err);
-      alert('Error analyzing code: ' + err.message);
+      setStatus(`Analysis Error: ${err.message}`, 'error');
     } finally {
       btnRunAnalysis.disabled = false;
       btnRunAnalysis.innerHTML = `
@@ -422,7 +441,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const metrics = data.metrics;
     const issues = data.issues || [];
 
-    // Update HUD
     metricGrade.textContent = metrics.security_rating;
     metricGrade.className = 'grade-badge grade-' + metrics.security_rating.toLowerCase();
 
@@ -435,7 +453,6 @@ document.addEventListener('DOMContentLoaded', () => {
     metricFuncs.textContent = `${metrics.functions_count} funcs`;
     metricDocker.textContent = metrics.container_readiness;
 
-    // Render Findings List
     findingsCountBadge.textContent = issues.length;
     findingsSummaryText.textContent = `Found ${issues.length} issue${issues.length === 1 ? '' : 's'} (${criticalCount} critical)`;
     findingsList.innerHTML = '';
@@ -472,7 +489,6 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Render Unified Diff
     if (data.diff_text) {
       const formattedDiff = data.diff_text.split('\n').map(line => {
         if (line.startsWith('+') && !line.startsWith('+++')) {
@@ -487,24 +503,18 @@ document.addEventListener('DOMContentLoaded', () => {
       diffCodeText.textContent = '// Code is already optimal. No diff required.';
     }
 
-    // Render Docker Files
     renderDockerCode();
-
-    // Render PR Markdown
     fetchPRMarkdown(codeEditor.value);
   }
 
   async function fetchPRMarkdown(code) {
     try {
-      const res = await fetch('/api/export-pr', {
+      const data = await requestJson('/api/export-pr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
       });
-      if (res.ok) {
-        const data = await res.json();
-        prMarkdownOutput.value = data.pr_markdown;
-      }
+      prMarkdownOutput.value = data.pr_markdown;
     } catch (e) {
       console.error(e);
     }

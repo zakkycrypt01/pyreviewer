@@ -16,6 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
 from app.analyzer import analyze_code, generate_dockerfile, generate_dockerignore, generate_render_yaml
+from app.repo_scanner import scan_repository
 
 PORT = int(os.environ.get("PORT", 8080))
 STATIC_DIR = BASE_DIR / "static"
@@ -172,6 +173,17 @@ class PyReviewerHandler(http.server.SimpleHTTPRequestHandler):
                 "dockerignore": dockerignore,
                 "render_yaml": render_yaml
             })
+            return
+
+        if parsed.path == "/api/scan-repo":
+            repo_url = payload.get("repo_url", "")
+            if not repo_url.strip():
+                self._send_json(400, {"error": "Please provide a valid GitHub repository URL."})
+                return
+
+            scan_result = scan_repository(repo_url)
+            status_code = 200 if "error" not in scan_result else 400
+            self._send_json(status_code, scan_result)
             return
 
         if parsed.path == "/api/export-pr":

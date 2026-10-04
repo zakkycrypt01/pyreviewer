@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PyReviewer — Senior Python AST, Security & Docker Packaging Reviewer</title>
-  <meta name="description" content="Production-grade Python code reviewer with Abstract Syntax Tree inspection, OWASP security scanning, and automated multi-stage Dockerfile generation for Render.">
+  <title>PyReviewer — Large Codebase AST, Security & Docker Packaging Reviewer</title>
+  <meta name="description" content="Production-grade Python code reviewer with Abstract Syntax Tree inspection, GitHub repository cloning, OWASP security scanning, and automated multi-stage Dockerfile generation for Render.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20,7 +20,7 @@
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
           </svg>
           <span class="brand-title">PyReviewer</span>
-          <span class="brand-version">v2.0</span>
+          <span class="brand-version">v2.5 Repo-Scale</span>
         </div>
 
         <div class="file-pill">
@@ -31,7 +31,7 @@
       </div>
 
       <div class="nav-center">
-        <label for="snippet-selector" class="snippet-label">Sample Code:</label>
+        <label for="snippet-selector" class="snippet-label">Single File:</label>
         <select id="snippet-selector" class="snippet-select" aria-label="Load code sample">
           <option value="microservice">Dave's FastAPI Microservice (SQL Injection & Blocking Async)</option>
           <option value="pipeline">Batch Pipeline (Pickle Deserialization & Unpythonic Loops)</option>
@@ -46,10 +46,30 @@
         </button>
         <button class="btn btn-primary" id="btn-run-analysis">
           <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          <span>Run AST Review</span>
+          <span>Run File Review</span>
         </button>
       </div>
     </header>
+
+    <!-- GitHub Codebase Scanner Toolbar -->
+    <section class="repo-scan-bar" aria-label="GitHub Codebase Scanner">
+      <div class="repo-input-wrapper">
+        <svg class="git-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+        </svg>
+        <input type="text" id="repo-url-input" class="repo-url-input" placeholder="Paste GitHub Repository URL (e.g. https://github.com/psf/requests or https://github.com/encode/starlette)...">
+        <button class="btn btn-primary" id="btn-scan-repo">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>Clone &amp; Scan Codebase</span>
+        </button>
+        <button class="btn btn-secondary" id="btn-demo-repo">
+          <span>Load Demo Microservice Repo</span>
+        </button>
+      </div>
+      <div class="repo-scan-status" id="repo-scan-status">
+        <span>Ready to scan public GitHub repository or single Python file</span>
+      </div>
+    </section>
 
     <!-- Metrics Bar / Health HUD -->
     <section class="metrics-bar" id="metrics-bar" aria-label="Code Metrics">
@@ -87,7 +107,7 @@
         <span class="metric-label">Lines of Code</span>
         <div class="metric-value-wrap">
           <span class="metric-val" id="metric-loc">--</span>
-          <span class="metric-sub" id="metric-funcs">0 functions</span>
+          <span class="metric-sub" id="metric-funcs">0 files / 0 funcs</span>
         </div>
       </div>
 
@@ -102,13 +122,30 @@
       </div>
     </section>
 
-    <!-- Main Workspace Split Pane -->
-    <main class="workspace-grid">
-      <!-- Left: Code Editor -->
+    <!-- Main Workspace (Explorer Sidebar + Editor + Review Panel) -->
+    <main class="workspace-grid" id="workspace-grid">
+      
+      <!-- Left Column: Codebase File Tree Explorer -->
+      <aside class="explorer-pane" id="explorer-pane">
+        <div class="pane-header">
+          <div class="pane-header-left">
+            <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span class="pane-title" id="repo-title-text">Codebase Explorer</span>
+          </div>
+          <span class="tree-count" id="tree-files-count">0 files</span>
+        </div>
+        <div class="tree-container" id="tree-container">
+          <div class="tree-empty-state">
+            <p>Paste a GitHub URL above to populate the repository file tree.</p>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center Column: Code Editor -->
       <section class="editor-pane">
         <div class="pane-header">
           <div class="pane-header-left">
-            <span class="pane-title">Python Source Code</span>
+            <span class="pane-title" id="active-file-title">Python Source Code</span>
             <span class="editor-cursor-pos" id="cursor-pos">Ln 1, Col 1</span>
           </div>
           <div class="pane-header-right">
@@ -119,40 +156,63 @@
 
         <div class="editor-wrapper">
           <div class="editor-gutter" id="editor-gutter" aria-hidden="true"></div>
-          <textarea id="code-editor" class="code-textarea" spellcheck="false" placeholder="# Paste your Python code here or choose a sample above..."></textarea>
+          <textarea id="code-editor" class="code-textarea" spellcheck="false" placeholder="# Paste your Python code here, load a snippet, or scan a GitHub repository above..."></textarea>
         </div>
       </section>
 
-      <!-- Right: Review Findings & Docker/Render Tools -->
+      <!-- Right Column: Audit Report & Inspector -->
       <section class="review-pane">
         <div class="pane-tabs" role="tablist">
-          <button class="pane-tab active" data-tab="tab-findings" id="tab-btn-findings" role="tab">
-            <span>Findings</span>
+          <button class="pane-tab active" data-tab="tab-report" id="tab-btn-report" role="tab">
+            <span>Codebase Report</span>
+          </button>
+          <button class="pane-tab" data-tab="tab-findings" id="tab-btn-findings" role="tab">
+            <span>File Findings</span>
             <span class="tab-badge" id="findings-count-badge">0</span>
           </button>
           <button class="pane-tab" data-tab="tab-diff" id="tab-btn-diff" role="tab">
             <span>Refactor Diff</span>
           </button>
           <button class="pane-tab" data-tab="tab-docker" id="tab-btn-docker" role="tab">
-            <span>Docker & Render</span>
+            <span>Docker &amp; Render</span>
           </button>
           <button class="pane-tab" data-tab="tab-pr" id="tab-btn-pr" role="tab">
             <span>PR Review Export</span>
           </button>
         </div>
 
-        <!-- Tab 1: Line-by-Line Findings -->
-        <div class="tab-content active" id="tab-findings" role="tabpanel">
+        <!-- Tab 0: Comprehensive Codebase Audit Report -->
+        <div class="tab-content active" id="tab-report" role="tabpanel">
+          <div class="report-toolbar">
+            <span class="toolbar-label" id="report-title-label">Executive Codebase Security &amp; Architecture Audit</span>
+            <div class="report-actions">
+              <button class="btn-sm btn-secondary" id="btn-copy-report">Copy Report (MD)</button>
+              <button class="btn-sm btn-accent" id="btn-download-report">Download Report</button>
+            </div>
+          </div>
+          <div class="report-scroll-container">
+            <div class="report-markdown-preview" id="report-markdown-preview">
+              <!-- Rendered report -->
+              <div class="empty-state">
+                <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <p><strong>No Codebase Scanned Yet</strong></p>
+                <span style="font-size:11px; color:#71717a;">Paste a GitHub URL or click "Load Demo Microservice Repo" to generate an executive audit report.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 1: Line-by-Line Findings for Selected File -->
+        <div class="tab-content" id="tab-findings" role="tabpanel">
           <div class="findings-toolbar">
-            <span class="toolbar-label" id="findings-summary-text">Showing all detected issues</span>
+            <span class="toolbar-label" id="findings-summary-text">Showing issues for active file</span>
             <button class="btn-sm btn-accent" id="btn-apply-all-fixes">Apply Refactor</button>
           </div>
 
           <div class="findings-list" id="findings-list">
-            <!-- Dynamic findings cards -->
             <div class="empty-state">
               <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-              <p>Click <strong>Run AST Review</strong> to inspect the code for security vulnerabilities, async pitfalls, and unpythonic patterns.</p>
+              <p>Click <strong>Run File Review</strong> or select a file from the repository tree.</p>
             </div>
           </div>
         </div>
@@ -160,11 +220,11 @@
         <!-- Tab 2: Unified Diff -->
         <div class="tab-content" id="tab-diff" role="tabpanel">
           <div class="diff-toolbar">
-            <span>Senior Engineer Refactored Version</span>
+            <span>Refactored Pythonic Version</span>
             <button class="btn-sm btn-secondary" id="btn-copy-diff">Copy Diff</button>
           </div>
           <div class="diff-viewer" id="diff-viewer">
-            <pre class="diff-code" id="diff-code-text">// Run review to generate refactoring diff...</pre>
+            <pre class="diff-code" id="diff-code-text">// Select a file or run review to generate refactoring diff...</pre>
           </div>
         </div>
 

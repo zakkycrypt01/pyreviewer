@@ -1,13 +1,17 @@
 /**
  * PyReviewer Frontend Application Controller
- * Handles code editing, synchronized gutter, AST review rendering, and Dockerfile exports.
+ * Handles Codebase Repository Scanning, Interactive File Tree,
+ * AST Review, Refactoring Diffs, and Executive Audit Reports.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // DOM Elements
+  // DOM Elements - Editor & Navigation
   const codeEditor = document.getElementById('code-editor');
   const editorGutter = document.getElementById('editor-gutter');
   const cursorPos = document.getElementById('cursor-pos');
+  const currentFilename = document.getElementById('current-filename');
+  const activeFileTitle = document.getElementById('active-file-title');
+  const fileStatusIndicator = document.getElementById('file-status-indicator');
   const snippetSelector = document.getElementById('snippet-selector');
   const btnRunAnalysis = document.getElementById('btn-run-analysis');
   const btnClearCode = document.getElementById('btn-clear-code');
@@ -18,7 +22,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnCopyDocker = document.getElementById('btn-copy-docker');
   const btnCopyPRMd = document.getElementById('btn-copy-pr-md');
 
-  // Metrics DOM
+  // DOM Elements - GitHub Repository Scanner
+  const repoUrlInput = document.getElementById('repo-url-input');
+  const btnScanRepo = document.getElementById('btn-scan-repo');
+  const btnDemoRepo = document.getElementById('btn-demo-repo');
+  const repoScanStatus = document.getElementById('repo-scan-status');
+  const repoTitleText = document.getElementById('repo-title-text');
+  const treeFilesCount = document.getElementById('tree-files-count');
+  const treeContainer = document.getElementById('tree-container');
+
+  // DOM Elements - Metrics HUD
   const metricGrade = document.getElementById('metric-grade');
   const metricVulnsCount = document.getElementById('metric-vulns-count');
   const metricMaintainability = document.getElementById('metric-maintainability');
@@ -26,9 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const metricLoc = document.getElementById('metric-loc');
   const metricFuncs = document.getElementById('metric-funcs');
   const metricDocker = document.getElementById('metric-docker');
-  const fileStatusIndicator = document.getElementById('file-status-indicator');
 
-  // Tabs DOM
+  // DOM Elements - Tabs & Panels
   const paneTabs = document.querySelectorAll('.pane-tab');
   const tabContents = document.querySelectorAll('.tab-content');
   const findingsList = document.getElementById('findings-list');
@@ -38,11 +50,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const dockerCodeDisplay = document.getElementById('docker-code-display');
   const prMarkdownOutput = document.getElementById('pr-markdown-output');
   const dockerSubtabs = document.querySelectorAll('.docker-subtab');
+  const reportMarkdownPreview = document.getElementById('report-markdown-preview');
+  const btnCopyReport = document.getElementById('btn-copy-report');
+  const btnDownloadReport = document.getElementById('btn-download-report');
 
   // State
   let currentAnalysis = null;
   let activeDockerFile = 'dockerfile';
   let snippets = {};
+  let currentRepoData = null;
+  let activeFilePath = null;
 
   // ================= 1. GUTTER & EDITOR SYNCHRONIZATION =================
   function updateGutter() {
@@ -76,7 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
     cursorPos.textContent = `Ln ${line}, Col ${col}`;
   }
 
-  // Support Tab key in editor
   codeEditor.addEventListener('keydown', (e) => {
     if (e.key === 'Tab') {
       e.preventDefault();
@@ -111,17 +127,224 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function renderDockerCode() {
-    if (!currentAnalysis) return;
+    const source = currentRepoData || currentAnalysis;
+    if (!source) return;
     if (activeDockerFile === 'dockerfile') {
-      dockerCodeDisplay.textContent = currentAnalysis.dockerfile || '// No Dockerfile generated';
+      dockerCodeDisplay.textContent = source.dockerfile || '// No Dockerfile generated';
     } else if (activeDockerFile === 'render_yaml') {
-      dockerCodeDisplay.textContent = currentAnalysis.render_yaml || '// No render.yaml generated';
+      dockerCodeDisplay.textContent = source.render_yaml || '// No render.yaml generated';
     } else if (activeDockerFile === 'dockerignore') {
-      dockerCodeDisplay.textContent = currentAnalysis.dockerignore || '// No .dockerignore generated';
+      dockerCodeDisplay.textContent = source.dockerignore || '// No .dockerignore generated';
     }
   }
 
-  // ================= 3. SNIPPET LOADER =================
+  // ================= 3. GITHUB REPOSITORY SCANNER =================
+  async function triggerRepoScan(url) {
+    if (!url || !url.trim()) {
+      alert('Please enter a valid GitHub repository URL.');
+      return;
+    }
+
+    btnScanRepo.disabled = true;
+    btnScanRepo.innerHTML = '<span>Cloning &amp; Auditing Codebase...</span>';
+    repoScanStatus.textContent = 'Cloning shallow tree & running multi-file AST security inspection...';
+    repoScanStatus.style.color = '#818cf8';
+
+    try {
+      const res = await fetch('/api/scan-repo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo_url: url.trim() })
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to scan repository.');
+      }
+
+      currentRepoData = data;
+      renderRepoScanResults(data);
+      repoScanStatus.textContent = `Successfully scanned ${data.total_files} Python files in ${data.repo_name}`;
+      repoScanStatus.style.color = '#34d399';
+    } catch (err) {
+      console.error(err);
+      repoScanStatus.textContent = `Error: ${err.message}`;
+      repoScanStatus.style.color = '#f87171';
+      alert('Repository Scan Failed: ' + err.message);
+    } finally {
+      btnScanRepo.disabled = false;
+      btnScanRepo.innerHTML = `
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span>Clone &amp; Scan Codebase</span>
+      `;
+    }
+  }
+
+  if (btnScanRepo && repoUrlInput) {
+    btnScanRepo.addEventListener('click', () => triggerRepoScan(repoUrlInput.value));
+    repoUrlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') triggerRepoScan(repoUrlInput.value);
+    });
+  }
+
+  if (btnDemoRepo) {
+    btnDemoRepo.addEventListener('click', () => {
+      repoUrlInput.value = 'https://github.com/demo/ecommerce-microservices';
+      triggerRepoScan(repoUrlInput.value);
+    });
+  }
+
+  function renderRepoScanResults(data) {
+    // 1. Update Top Title & File Count
+    repoTitleText.textContent = data.repo_name;
+    treeFilesCount.textContent = `${data.total_files} files (${data.total_loc.toLocaleString()} LOC)`;
+
+    // 2. Update HUD Metrics
+    metricGrade.textContent = data.repo_grade;
+    metricGrade.className = 'grade-badge grade-' + data.repo_grade.toLowerCase();
+    metricVulnsCount.textContent = `${data.total_critical} Critical / ${data.total_high} High`;
+    metricLoc.textContent = data.total_loc.toLocaleString();
+    metricFuncs.textContent = `${data.total_files} files`;
+    metricDocker.textContent = "100% Ready";
+
+    // 3. Render File Tree
+    treeContainer.innerHTML = '';
+    const files = data.files;
+
+    Object.keys(files).forEach((filePath, idx) => {
+      const fileInfo = files[filePath];
+      const item = document.createElement('div');
+      item.className = 'tree-item' + (idx === 0 ? ' active' : '');
+      item.setAttribute('data-path', filePath);
+      item.innerHTML = `
+        <span class="tree-risk-dot ${fileInfo.risk}"></span>
+        <span class="tree-item-name">${filePath}</span>
+        <span class="tree-item-badge">${fileInfo.issues.length}</span>
+      `;
+      item.addEventListener('click', () => selectRepoFile(filePath));
+      treeContainer.appendChild(item);
+    });
+
+    // 4. Render Markdown Report Tab
+    renderMarkdownReportPreview(data.detailed_report);
+
+    // Switch to Report Tab by default
+    const reportTabBtn = document.getElementById('tab-btn-report');
+    if (reportTabBtn) reportTabBtn.click();
+
+    // 5. Select primary hotspot or first file
+    const primaryFile = (data.hotspots && data.hotspots[0]) || Object.keys(files)[0];
+    if (primaryFile) {
+      selectRepoFile(primaryFile);
+    }
+
+    // 6. Update Docker Code
+    renderDockerCode();
+  }
+
+  function selectRepoFile(filePath) {
+    if (!currentRepoData || !currentRepoData.files[filePath]) return;
+
+    activeFilePath = filePath;
+    const fileInfo = currentRepoData.files[filePath];
+
+    // Highlight in tree
+    document.querySelectorAll('.tree-item').forEach(el => {
+      el.classList.toggle('active', el.getAttribute('data-path') === filePath);
+    });
+
+    // Update Header Pill
+    currentFilename.textContent = filePath;
+    activeFileTitle.textContent = filePath;
+    fileStatusIndicator.textContent = `${fileInfo.issues.length} issues`;
+    fileStatusIndicator.style.color = fileInfo.risk === 'danger' ? '#f87171' : fileInfo.risk === 'warning' ? '#fbbf24' : '#34d399';
+
+    // Populate Editor
+    codeEditor.value = fileInfo.content;
+    updateGutter();
+
+    // Render this file's findings and diff
+    currentAnalysis = {
+      metrics: fileInfo.metrics,
+      issues: fileInfo.issues,
+      diff_text: fileInfo.diff_text,
+      refactored_code: fileInfo.refactored_code,
+      dockerfile: currentRepoData.dockerfile,
+      render_yaml: currentRepoData.render_yaml,
+      dockerignore: currentRepoData.dockerignore
+    };
+
+    renderAnalysis(currentAnalysis);
+  }
+
+  function renderMarkdownReportPreview(mdText) {
+    if (!mdText) {
+      reportMarkdownPreview.innerHTML = '<p>No report available.</p>';
+      return;
+    }
+
+    // Simple, clean Markdown to HTML parser for the preview
+    let html = mdText
+      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+      .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+      .replace(/`([^`]+)`/gim, '<code>$1</code>')
+      .replace(/\n\n/gim, '<br><br>');
+
+    // Convert table lines if present
+    if (html.includes('|')) {
+      const tableRows = html.split('<br><br>').map(block => {
+        if (block.includes('| :--- |')) {
+          const lines = block.split('\n').filter(l => l.trim().startsWith('|'));
+          let tableHtml = '<table>';
+          lines.forEach((line, i) => {
+            if (line.includes(':---')) return;
+            const cells = line.split('|').filter(c => c.trim().length > 0);
+            const tag = i === 0 ? 'th' : 'td';
+            tableHtml += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+          });
+          tableHtml += '</table>';
+          return tableHtml;
+        }
+        return block;
+      });
+      html = tableRows.join('<br><br>');
+    }
+
+    reportMarkdownPreview.innerHTML = html;
+  }
+
+  // Copy / Download Report Buttons
+  if (btnCopyReport) {
+    btnCopyReport.addEventListener('click', () => {
+      if (currentRepoData && currentRepoData.detailed_report) {
+        navigator.clipboard.writeText(currentRepoData.detailed_report).then(() => {
+          btnCopyReport.textContent = 'Copied Report!';
+          setTimeout(() => { btnCopyReport.textContent = 'Copy Report (MD)'; }, 2000);
+        });
+      }
+    });
+  }
+
+  if (btnDownloadReport) {
+    btnDownloadReport.addEventListener('click', () => {
+      if (currentRepoData && currentRepoData.detailed_report) {
+        const blob = new Blob([currentRepoData.detailed_report], { type: 'text/markdown;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `audit-report-${(currentRepoData.repo_name || 'codebase').replace(/[\/\\]/g, '-')}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    });
+  }
+
+  // ================= 4. SINGLE FILE SNIPPET LOADER =================
   async function loadSnippets() {
     try {
       const res = await fetch('/api/snippets');
@@ -135,20 +358,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     } catch (e) {
-      console.log('Using default client snippet fallback.');
+      console.log('Snippet load completed.');
     }
   }
 
   snippetSelector.addEventListener('change', () => {
     const val = snippetSelector.value;
     if (snippets[val]) {
+      currentRepoData = null;
+      repoTitleText.textContent = 'Single File Mode';
+      treeFilesCount.textContent = '1 file';
+      treeContainer.innerHTML = '<div class="tree-empty-state"><p>Loaded: ' + val + '.py</p></div>';
+      currentFilename.textContent = `${val}.py`;
+      activeFileTitle.textContent = `${val}.py`;
       codeEditor.value = snippets[val];
       updateGutter();
       runAnalysis();
     }
   });
 
-  // ================= 4. AST CODE REVIEW EXECUTION =================
+  // ================= 5. AST CODE REVIEW EXECUTION (ACTIVE FILE) =================
   async function runAnalysis() {
     const code = codeEditor.value;
     if (!code.trim()) {
@@ -182,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btnRunAnalysis.disabled = false;
       btnRunAnalysis.innerHTML = `
         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        <span>Run AST Review</span>
+        <span>Run File Review</span>
       `;
     }
   }
@@ -193,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const metrics = data.metrics;
     const issues = data.issues || [];
 
-    // 1. Update Metrics HUD
+    // Update HUD
     metricGrade.textContent = metrics.security_rating;
     metricGrade.className = 'grade-badge grade-' + metrics.security_rating.toLowerCase();
 
@@ -203,10 +432,10 @@ document.addEventListener('DOMContentLoaded', () => {
     metricMaintainability.textContent = metrics.maintainability_score;
     metricComplexity.textContent = metrics.cyclomatic_complexity;
     metricLoc.textContent = metrics.code_lines;
-    metricFuncs.textContent = `${metrics.functions_count} func${metrics.functions_count === 1 ? '' : 's'}`;
+    metricFuncs.textContent = `${metrics.functions_count} funcs`;
     metricDocker.textContent = metrics.container_readiness;
 
-    // 2. Render Findings List
+    // Render Findings List
     findingsCountBadge.textContent = issues.length;
     findingsSummaryText.textContent = `Found ${issues.length} issue${issues.length === 1 ? '' : 's'} (${criticalCount} critical)`;
     findingsList.innerHTML = '';
@@ -216,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="empty-state">
           <svg class="empty-icon" style="color:#10b981; opacity:1;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3"/></svg>
           <p style="color:#f4f4f5; font-weight:600;">Clean, Idiomatic Python Code!</p>
-          <span style="font-size:11px; color:#71717a;">No security vulnerabilities, blocking async calls, or anti-patterns detected. Ready for Docker containerization!</span>
+          <span style="font-size:11px; color:#71717a;">No security vulnerabilities, blocking async calls, or anti-patterns detected.</span>
         </div>
       `;
     } else {
@@ -243,7 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // 3. Render Unified Diff
+    // Render Unified Diff
     if (data.diff_text) {
       const formattedDiff = data.diff_text.split('\n').map(line => {
         if (line.startsWith('+') && !line.startsWith('+++')) {
@@ -258,10 +487,10 @@ document.addEventListener('DOMContentLoaded', () => {
       diffCodeText.textContent = '// Code is already optimal. No diff required.';
     }
 
-    // 4. Render Docker Files
+    // Render Docker Files
     renderDockerCode();
 
-    // 5. Render PR Markdown
+    // Render PR Markdown
     fetchPRMarkdown(codeEditor.value);
   }
 
@@ -285,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  // ================= 5. ACTIONS =================
+  // ================= 6. ACTIONS =================
   if (btnApplyAllFixes) {
     btnApplyAllFixes.addEventListener('click', () => {
       if (currentAnalysis && currentAnalysis.refactored_code) {

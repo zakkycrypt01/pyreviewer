@@ -1,6 +1,7 @@
 /* ==============================================================================
    PyReviewer — Professional Developer Interface Stylesheet
    Crafted with high-density, zero-clutter developer aesthetics.
+   Suitable for single files and large GitHub codebases.
    ============================================================================== */
 
 :root {
@@ -162,6 +163,57 @@ body {
   gap: 8px;
 }
 
+/* ================= REPO SCAN BAR ================= */
+.repo-scan-bar {
+  background: #0d0d10;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.repo-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 880px;
+}
+
+.git-icon {
+  width: 16px;
+  height: 16px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.repo-url-input {
+  flex: 1;
+  background: #18181b;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.repo-url-input:focus {
+  border-color: #6366f1;
+}
+
+.repo-scan-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -309,12 +361,90 @@ body {
 /* ================= WORKSPACE SPLIT PANE ================= */
 .workspace-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 240px 1fr 1fr;
   flex: 1;
   overflow: hidden;
 }
 
-/* Left Pane: Code Editor */
+/* Left Pane: Explorer */
+.explorer-pane {
+  background: #0c0c0f;
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tree-count {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.tree-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tree-empty-state {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.tree-item:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.tree-item.active {
+  background: #1e1e24;
+  color: #fff;
+  border-left: 2px solid #6366f1;
+}
+
+.tree-risk-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tree-risk-dot.danger { background: #ef4444; }
+.tree-risk-dot.warning { background: #f59e0b; }
+.tree-risk-dot.safe { background: #10b981; }
+
+.tree-item-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-item-badge {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Center Pane: Code Editor */
 .editor-pane {
   display: flex;
   flex-direction: column;
@@ -411,7 +541,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 16px;
+  padding: 0 14px;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -420,6 +550,7 @@ body {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .pane-tab:hover {
@@ -450,6 +581,79 @@ body {
 
 .tab-content.active {
   display: flex;
+}
+
+/* Tab 0: Report */
+.report-toolbar {
+  height: 36px;
+  background: #141418;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  flex-shrink: 0;
+}
+
+.report-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.report-scroll-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 24px;
+}
+
+.report-markdown-preview {
+  color: #e4e4e7;
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.report-markdown-preview h1 {
+  font-size: 1.4rem;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 8px;
+}
+
+.report-markdown-preview h2 {
+  font-size: 1.15rem;
+  margin: 18px 0 10px 0;
+  color: #f8fafc;
+}
+
+.report-markdown-preview h3 {
+  font-size: 0.98rem;
+  margin: 14px 0 6px 0;
+}
+
+.report-markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 12px;
+}
+
+.report-markdown-preview th, .report-markdown-preview td {
+  border: 1px solid var(--border-subtle);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.report-markdown-preview th {
+  background: var(--bg-elevated);
+  color: #fff;
+}
+
+.report-markdown-preview code {
+  background: var(--bg-elevated);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
 }
 
 /* Tab 1: Findings */
@@ -721,4 +925,11 @@ body {
   border: none;
   outline: none;
   resize: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1100px) {
+  .workspace-grid {
+    grid-template-columns: 200px 1fr 1fr;
+  }
 }
